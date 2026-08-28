@@ -7,7 +7,7 @@ T=$D/.token
 S=$D/config.yaml
 U=/etc/systemd/system/xray-sub.service
 B=/usr/local/bin/xray
-need(){ [ $(id -u) -eq 0 ] || { echo "run as root" >&2; exit 1; }; }
+need(){ [ "$(id -u)" -eq 0 ] || { echo "错误：请使用 root 用户运行，或在命令前加 sudo。" >&2; exit 1; }; }
 get(){ [ -r "$C" ] && awk -F= -v k="$1" '$1==k{print substr($0,index($0,"=")+1);exit}' "$C" || true; }
 url(){ printf 'http://%s:2054/sub/%s\n' "$(get SERVER)" "$(get TOKEN)"; }
 install_all(){
@@ -77,10 +77,10 @@ class H(BaseHTTPRequestHandler):
 ThreadingHTTPServer(("0.0.0.0",2054),H).serve_forever()
 PY
  chmod 755 /usr/local/bin/xray-sub-auth.py; $B run -test -config $X; systemctl daemon-reload; systemctl enable xray >/dev/null; systemctl restart xray; systemctl enable --now xray-sub >/dev/null
- echo "subscription: $(url)"
+ echo "订阅地址：$(url)"
 }
-status(){ need; systemctl is-active xray xray-sub || true; ss -lntp|grep -E ':(2053|2054|2055)\b' || true; }
-check(){ need; $B run -test -config $X; curl -fsS "$(url)" >/dev/null; echo OK; }
-menu(){ while true; do printf '\n1 Install/repair\n2 Status\n3 Subscription URL\n4 Restart\n5 Check\n6 Xray logs\n7 Subscription logs\n8 Uninstall\n0 Exit\nSelect: '; read -r n; case $n in 1)install_all;;2)status;;3)need;url;;4)need;systemctl restart xray xray-sub;;5)check;;6)need;journalctl -u xray -n 80 --no-pager;;7)need;journalctl -u xray-sub -n 80 --no-pager;;8)uninstall;;0)return;;esac; done; }
-uninstall(){ need; read -r -p "Type REMOVE to uninstall: " n; [ "$n" = REMOVE ] || return; systemctl disable --now xray-sub xray 2>/dev/null||true; rm -f $U /usr/local/bin/xray-sub-auth.py /usr/local/bin/xr; rm -rf $D /usr/local/etc/xray $C; systemctl daemon-reload; }
-case ${1:-menu} in install)install_all;;menu)need;menu;;status)status;;sub|info)need;url;;restart)need;systemctl restart xray xray-sub;;check)check;;logs)need;journalctl -u ${2:-xray} -n 80 --no-pager;;uninstall)uninstall;;help|-h|--help)echo 'xr [install|menu|status|sub|restart|check|logs|uninstall]';;*)echo 'invalid command';exit 2;;esac
+status(){ need; echo "Xray 服务状态："; systemctl is-active xray xray-sub || true; echo "监听端口："; ss -lntp|grep -E ':(2053|2054|2055)\b' || true; }
+check(){ need; echo "正在检查 Xray 配置和订阅服务..."; $B run -test -config $X; curl -fsS "$(url)" >/dev/null; echo "检查通过。"; }
+menu(){ while true; do printf '\n===== xr 管理菜单 =====\n1. 安装 / 修复 Xray\n2. 查看服务状态\n3. 查看订阅地址\n4. 重启服务\n5. 检查配置和订阅\n6. 查看 Xray 日志\n7. 查看订阅服务日志\n8. 卸载\n0. 退出\n请选择：'; read -r n; case $n in 1)install_all;;2)status;;3)need;url;;4)need;systemctl restart xray xray-sub; echo "服务已重启。";;5)check;;6)need;journalctl -u xray -n 80 --no-pager;;7)need;journalctl -u xray-sub -n 80 --no-pager;;8)uninstall;;0)return;;*) echo "无效选项，请输入 0-8。";; esac; done; }
+uninstall(){ need; read -r -p "请输入 REMOVE 确认卸载：" n; [ "$n" = REMOVE ] || { echo "已取消卸载。"; return; }; systemctl disable --now xray-sub xray 2>/dev/null||true; rm -f $U /usr/local/bin/xray-sub-auth.py /usr/local/bin/xr; rm -rf $D /usr/local/etc/xray $C; systemctl daemon-reload; echo "已卸载 xr、Xray 和订阅服务。"; }
+case ${1:-menu} in install)install_all;;menu)need;menu;;status)status;;sub|info)need;url;;restart)need;systemctl restart xray xray-sub; echo "服务已重启。";;check)check;;logs)need;journalctl -u ${2:-xray} -n 80 --no-pager;;uninstall)uninstall;;help|-h|--help)echo '用法：xr [install|menu|status|sub|restart|check|logs|uninstall]';;*)echo '错误：无效命令。使用 xr --help 查看用法。';exit 2;;esac
